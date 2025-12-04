@@ -84,39 +84,22 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
 
     try {
       const response = await fetch(`/api/documents/${document.id}/download`);
+      if (!response.ok) throw new Error('Download failed');
 
-      if (!response.ok) {
-        throw new Error('Download failed');
-      }
-
-      // Get the blob from the response
       const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = document.title || 'document';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-      // Create a temporary URL for the blob
-      const url = window.URL.createObjectURL(blob);
-
-      // Create a temporary anchor element and trigger download
-      const a = window.document.createElement('a');
-      a.href = url;
-      a.download = document.title || 'document';
-      window.document.body.appendChild(a);
-      a.click();
-
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      window.document.body.removeChild(a);
-
-      toast({
-        title: "Download started",
-        description: `Downloading ${document.title}`,
-      });
+      toast({ title: "Download started", description: `Downloading ${document.title}` });
     } catch (error) {
       console.error('Download error:', error);
-      toast({
-        title: "Download failed",
-        description: "Unable to download the document",
-        variant: "destructive",
-      });
+      toast({ title: "Download failed", description: "Unable to download the document", variant: "destructive" });
     }
   };
 
