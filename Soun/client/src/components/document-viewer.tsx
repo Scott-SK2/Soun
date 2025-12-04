@@ -96,15 +96,15 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
       const url = window.URL.createObjectURL(blob);
 
       // Create a temporary anchor element and trigger download
-      const a = document.createElement('a');
+      const a = window.document.createElement('a');
       a.href = url;
       a.download = document.title || 'document';
-      document.body.appendChild(a);
+      window.document.body.appendChild(a);
       a.click();
 
       // Cleanup
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      window.document.body.removeChild(a);
 
       toast({
         title: "Download started",
