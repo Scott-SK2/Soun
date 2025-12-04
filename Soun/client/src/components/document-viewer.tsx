@@ -79,6 +79,47 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
     }
   };
 
+  const handleDownload = async () => {
+    if (!document) return;
+
+    try {
+      const response = await fetch(`/api/documents/${document.id}/download`);
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      // Get the blob from the response
+      const blob = await response.blob();
+
+      // Create a temporary URL for the blob
+      const url = window.URL.createObjectURL(blob);
+
+      // Create a temporary anchor element and trigger download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = document.title || 'document';
+      document.body.appendChild(a);
+      a.click();
+
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Download started",
+        description: `Downloading ${document.title}`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "Unable to download the document",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="w-full h-full min-h-[500px] flex items-center justify-center">
@@ -200,7 +241,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               <span className="capitalize">{document.fileType}</span> Document
             </CardDescription>
           </div>
-          <Button variant="secondary" size="sm">
+          <Button variant="secondary" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" /> Download
           </Button>
         </div>
