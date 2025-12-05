@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent
+  CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,7 +14,7 @@ import {
   Download,
   FileText,
   PresentationIcon,
-  ListIcon
+  ListIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,16 +45,16 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
 
   // Parse metadata for PowerPoint presentations
   useEffect(() => {
-    if (document?.metadata && document.fileType === 'pptx') {
+    if (document?.metadata && document.fileType === "pptx") {
       try {
         const data = JSON.parse(document.metadata);
-        if (data.type === 'pptx' && Array.isArray(data.slides)) {
+        if (data.type === "pptx" && Array.isArray(data.slides)) {
           setSlides(data.slides);
           // Reset current slide when loading a new presentation
           setCurrentSlide(0);
         }
       } catch (error) {
-        console.error('Error parsing document metadata:', error);
+        console.error("Error parsing document metadata:", error);
         toast({
           title: "Error parsing presentation",
           description: "Unable to load slide data",
@@ -69,13 +69,13 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
 
   const goToNextSlide = () => {
     if (currentSlide < slides.length - 1) {
-      setCurrentSlide(prev => prev + 1);
+      setCurrentSlide((prev) => prev + 1);
     }
   };
 
   const goToPrevSlide = () => {
     if (currentSlide > 0) {
-      setCurrentSlide(prev => prev - 1);
+      setCurrentSlide((prev) => prev - 1);
     }
   };
 
@@ -85,7 +85,10 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
     // Open in new tab to bypass iframe download restrictions in Replit
     window.open(`/api/documents/${document.id}/download`, '_blank');
 
-    toast({ title: "Download started", description: `Opening ${document.title} in new tab` });
+    toast({
+      title: "Download started",
+      description: `Opening ${document.title} in new tab`
+    });
   };
 
   if (isLoading) {
@@ -105,7 +108,9 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
         <div className="text-center p-6">
           <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-xl font-semibold mb-2">No document selected</h3>
-          <p className="text-muted-foreground">Select a document from your library to view it here</p>
+          <p className="text-muted-foreground">
+            Select a document from your library to view it here
+          </p>
         </div>
       </Card>
     );
@@ -134,14 +139,16 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
             variant="outline"
             size="icon"
             disabled={currentSlide === 0}
-            onClick={goToPrevSlide}>
+            onClick={goToPrevSlide}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
             disabled={currentSlide === slides.length - 1}
-            onClick={goToNextSlide}>
+            onClick={goToNextSlide}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -215,9 +222,13 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        <Tabs defaultValue={currentTab} onValueChange={setCurrentTab} className="w-full">
+        <Tabs
+          defaultValue={currentTab}
+          onValueChange={setCurrentTab}
+          className="w-full"
+        >
           <TabsList className="mb-4">
-            {document.fileType === 'pptx' && (
+            {document.fileType === "pptx" && (
               <TabsTrigger value="slides">
                 <PresentationIcon className="h-4 w-4 mr-2" /> Slides
               </TabsTrigger>
@@ -227,7 +238,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
             </TabsTrigger>
           </TabsList>
 
-          {document.fileType === 'pptx' && (
+          {document.fileType === "pptx" && (
             <TabsContent value="slides" className="mt-0">
               {renderPowerPointView()}
             </TabsContent>
