@@ -82,20 +82,10 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
   const handleDownload = () => {
     if (!document) return;
 
-    // Use direct link approach - simpler and avoids cache issues
-    const link = document.createElement('a');
-    link.href = `/api/documents/${document.id}/download`;
-    link.download = document.title || 'document';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
+    // Open in new tab to bypass iframe download restrictions in Replit
+    window.open(`/api/documents/${document.id}/download`, '_blank');
 
-    // Small delay before cleanup to ensure download starts
-    setTimeout(() => {
-      document.body.removeChild(link);
-    }, 100);
-
-    toast({ title: "Download started", description: `Downloading ${document.title}` });
+    toast({ title: "Download started", description: `Opening ${document.title} in new tab` });
   };
 
   if (isLoading) {
