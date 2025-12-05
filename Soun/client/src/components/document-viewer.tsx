@@ -83,8 +83,14 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
     if (!document) return;
 
     try {
-      const response = await fetch(`/api/documents/${document.id}/download`);
-      if (!response.ok) throw new Error('Download failed');
+      // Add cache-busting parameter to force fresh download
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/documents/${document.id}/download?t=${timestamp}`, {
+        cache: 'no-cache'
+      });
+
+      // Accept both 200 (OK) and 304 (Not Modified) as valid responses
+      if (!response.ok && response.status !== 304) throw new Error('Download failed');
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
