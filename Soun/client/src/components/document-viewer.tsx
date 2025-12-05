@@ -79,34 +79,23 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!document) return;
 
-    try {
-      // Add cache-busting parameter to force fresh download
-      const timestamp = new Date().getTime();
-      const response = await fetch(`/api/documents/${document.id}/download?t=${timestamp}`, {
-        cache: 'no-cache'
-      });
+    // Use direct link approach - simpler and avoids cache issues
+    const link = document.createElement('a');
+    link.href = `/api/documents/${document.id}/download`;
+    link.download = document.title || 'document';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
 
-      // Accept both 200 (OK) and 304 (Not Modified) as valid responses
-      if (!response.ok && response.status !== 304) throw new Error('Download failed');
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = document.title || 'document';
-      document.body.appendChild(link);
-      link.click();
+    // Small delay before cleanup to ensure download starts
+    setTimeout(() => {
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+    }, 100);
 
-      toast({ title: "Download started", description: `Downloading ${document.title}` });
-    } catch (error) {
-      console.error('Download error:', error);
-      toast({ title: "Download failed", description: "Unable to download the document", variant: "destructive" });
-    }
+    toast({ title: "Download started", description: `Downloading ${document.title}` });
   };
 
   if (isLoading) {
