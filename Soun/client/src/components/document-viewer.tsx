@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   Card,
   CardHeader,
   CardTitle,
@@ -8,10 +8,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
   FileText,
   PresentationIcon,
   ListIcon
@@ -145,27 +145,27 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
           <span className="text-sm font-medium text-muted-foreground">
             {currentSlide + 1} / {slides.length}
           </span>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentSlide === 0}
             onClick={goToPrevSlide}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentSlide === slides.length - 1}
             onClick={goToNextSlide}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {/* Slide content */}
         <div className="pt-16 pb-10 px-10 bg-white rounded-md border min-h-[400px]">
           <h2 className="text-2xl font-bold mb-6 text-center">{slide.title}</h2>
           <p className="text-lg mb-6">{slide.content}</p>
-          
+
           {slide.bullets && slide.bullets.length > 0 && (
             <ul className="space-y-3 my-6">
               {slide.bullets.map((bullet, index) => (
@@ -176,7 +176,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               ))}
             </ul>
           )}
-          
+
           {slide.image && (
             <div className="my-4 text-center">
               <div className="py-10 px-4 bg-gray-100 rounded-md text-muted-foreground italic">
@@ -185,7 +185,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
             </div>
           )}
         </div>
-        
+
         {/* Slide notes if available */}
         {slide.notes && (
           <div className="mt-4 p-4 bg-muted rounded-md">
@@ -241,13 +241,13 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               <FileText className="h-4 w-4 mr-2" /> Text Content
             </TabsTrigger>
           </TabsList>
-          
+
           {document.fileType === 'pptx' && (
             <TabsContent value="slides" className="mt-0">
               {renderPowerPointView()}
             </TabsContent>
           )}
-          
+
           <TabsContent value="content" className="mt-0">
             {renderRawContent()}
           </TabsContent>
