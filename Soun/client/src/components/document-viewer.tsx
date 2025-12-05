@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
-import { 
+import { useState, useEffect } from "react";
+import {
   Card,
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent
+  CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Download, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
   FileText,
   PresentationIcon,
-  ListIcon
+  ListIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,16 +45,16 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
 
   // Parse metadata for PowerPoint presentations
   useEffect(() => {
-    if (document?.metadata && document.fileType === 'pptx') {
+    if (document?.metadata && document.fileType === "pptx") {
       try {
         const data = JSON.parse(document.metadata);
-        if (data.type === 'pptx' && Array.isArray(data.slides)) {
+        if (data.type === "pptx" && Array.isArray(data.slides)) {
           setSlides(data.slides);
           // Reset current slide when loading a new presentation
           setCurrentSlide(0);
         }
       } catch (error) {
-        console.error('Error parsing document metadata:', error);
+        console.error("Error parsing document metadata:", error);
         toast({
           title: "Error parsing presentation",
           description: "Unable to load slide data",
@@ -69,14 +69,26 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
 
   const goToNextSlide = () => {
     if (currentSlide < slides.length - 1) {
-      setCurrentSlide(prev => prev + 1);
+      setCurrentSlide((prev) => prev + 1);
     }
   };
 
   const goToPrevSlide = () => {
     if (currentSlide > 0) {
-      setCurrentSlide(prev => prev - 1);
+      setCurrentSlide((prev) => prev - 1);
     }
+  };
+
+  const handleDownload = () => {
+    if (!document) return;
+
+    // Open in new tab to bypass iframe download restrictions in Replit
+    window.open(`/api/documents/${document.id}/download`, '_blank');
+
+    toast({
+      title: "Download started",
+      description: `Opening ${document.title} in new tab`
+    });
   };
 
   if (isLoading) {
@@ -96,7 +108,9 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
         <div className="text-center p-6">
           <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-xl font-semibold mb-2">No document selected</h3>
-          <p className="text-muted-foreground">Select a document from your library to view it here</p>
+          <p className="text-muted-foreground">
+            Select a document from your library to view it here
+          </p>
         </div>
       </Card>
     );
@@ -121,27 +135,29 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
           <span className="text-sm font-medium text-muted-foreground">
             {currentSlide + 1} / {slides.length}
           </span>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentSlide === 0}
-            onClick={goToPrevSlide}>
+            onClick={goToPrevSlide}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             disabled={currentSlide === slides.length - 1}
-            onClick={goToNextSlide}>
+            onClick={goToNextSlide}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        
+
         {/* Slide content */}
         <div className="pt-16 pb-10 px-10 bg-white rounded-md border min-h-[400px]">
           <h2 className="text-2xl font-bold mb-6 text-center">{slide.title}</h2>
           <p className="text-lg mb-6">{slide.content}</p>
-          
+
           {slide.bullets && slide.bullets.length > 0 && (
             <ul className="space-y-3 my-6">
               {slide.bullets.map((bullet, index) => (
@@ -152,7 +168,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               ))}
             </ul>
           )}
-          
+
           {slide.image && (
             <div className="my-4 text-center">
               <div className="py-10 px-4 bg-gray-100 rounded-md text-muted-foreground italic">
@@ -161,7 +177,7 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
             </div>
           )}
         </div>
-        
+
         {/* Slide notes if available */}
         {slide.notes && (
           <div className="mt-4 p-4 bg-muted rounded-md">
@@ -200,15 +216,19 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               <span className="capitalize">{document.fileType}</span> Document
             </CardDescription>
           </div>
-          <Button variant="secondary" size="sm">
+          <Button variant="secondary" size="sm" onClick={handleDownload}>
             <Download className="h-4 w-4 mr-2" /> Download
           </Button>
         </div>
       </CardHeader>
       <CardContent className="pt-4">
-        <Tabs defaultValue={currentTab} onValueChange={setCurrentTab} className="w-full">
+        <Tabs
+          defaultValue={currentTab}
+          onValueChange={setCurrentTab}
+          className="w-full"
+        >
           <TabsList className="mb-4">
-            {document.fileType === 'pptx' && (
+            {document.fileType === "pptx" && (
               <TabsTrigger value="slides">
                 <PresentationIcon className="h-4 w-4 mr-2" /> Slides
               </TabsTrigger>
@@ -217,13 +237,13 @@ export function DocumentViewer({ document, isLoading }: DocumentViewerProps) {
               <FileText className="h-4 w-4 mr-2" /> Text Content
             </TabsTrigger>
           </TabsList>
-          
-          {document.fileType === 'pptx' && (
+
+          {document.fileType === "pptx" && (
             <TabsContent value="slides" className="mt-0">
               {renderPowerPointView()}
             </TabsContent>
           )}
-          
+
           <TabsContent value="content" className="mt-0">
             {renderRawContent()}
           </TabsContent>
