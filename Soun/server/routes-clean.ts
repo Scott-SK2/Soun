@@ -699,16 +699,25 @@ router.post("/api/voice/process", requireAuth, async (req, res) => {
         'tech entrepreneurship': '011274',
       };
 
+      // First check if command mentions a specific course
       for (const [subject, id] of Object.entries(subjectMappings)) {
         if (cmd.toLowerCase().includes(subject)) {
           return id;
         }
       }
 
-      return courseId;
+      // If no course mentioned but courseId provided from URL context, use it
+      return courseId || null;
     };
 
     const detectedCourseId = detectCourseFromCommand(command);
+
+    console.log('Voice command processing:', {
+      command,
+      courseIdFromRequest: courseId,
+      detectedCourseId,
+      userId
+    });
 
     // Handle course-specific queries
     if (detectedCourseId) {
@@ -722,6 +731,8 @@ router.post("/api/voice/process", requireAuth, async (req, res) => {
             eq(documents.courseId, detectedCourseId)
           ))
           .limit(10); // Limit results for performance
+
+        console.log(`Found ${courseDocuments.length} documents for course ${detectedCourseId} and user ${userId}`);
 
         if (courseDocuments.length > 0) {
           courseContext = `Course: ${detectedCourseId}`;

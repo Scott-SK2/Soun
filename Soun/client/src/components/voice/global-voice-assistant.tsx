@@ -742,9 +742,10 @@ export function GlobalVoiceAssistant() {
       const semanticContext = null;
 
       const sessionId = Date.now().toString(); // Generate simple session ID
-      
+
       const response = await apiRequest('POST', '/api/voice/process', {
         command: transcript,
+        courseId: courseContext, // Send courseId to backend
         sessionId,
         currentPath,
         currentUrl,
