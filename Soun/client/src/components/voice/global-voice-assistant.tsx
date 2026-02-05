@@ -112,6 +112,7 @@ export function GlobalVoiceAssistant() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [response, setResponse] = useState("");
+  const [shouldKeepListening, setShouldKeepListening] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<Array<{
     type: 'user' | 'assistant';
     message: string;
@@ -170,6 +171,7 @@ export function GlobalVoiceAssistant() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldKeepListeningRef = useRef<boolean>(false);
   const audioAnalysisRef = useRef<{
     startTime: number;
     pitchSamples: number[];
@@ -245,6 +247,7 @@ export function GlobalVoiceAssistant() {
       if (autoStopTimeoutRef.current) {
         clearTimeout(autoStopTimeoutRef.current);
       }
+      shouldKeepListeningRef.current = false;
       cleanupPerformanceServices();
     };
   }, [user]);
@@ -536,18 +539,6 @@ export function GlobalVoiceAssistant() {
           if (lastResult.isFinal) {
             setTranscript(transcript);
 
-            // Clear any existing timeout
-            if (autoStopTimeoutRef.current) {
-              clearTimeout(autoStopTimeoutRef.current);
-            }
-
-            // Auto-stop after 15 seconds of silence to give user plenty of time
-            autoStopTimeoutRef.current = setTimeout(() => {
-              if (recognitionRef.current && isListening) {
-                recognitionRef.current.stop();
-              }
-            }, 15000);
-
             if (isOfflineMode) {
               // Store for offline processing
               offlineTranscriptRef.current = transcript;
@@ -559,7 +550,17 @@ export function GlobalVoiceAssistant() {
         };
 
         recognitionRef.current.onerror = (event: any) => {
+          console.error('Recognition error:', event.error);
+
+          // Don't stop on "no-speech" error - this is normal when user is silent
+          if (event.error === 'no-speech') {
+            console.log('No speech detected, but continuing to listen...');
+            return; // Don't stop, let onend handle it
+          }
+
           setIsListening(false);
+          setShouldKeepListening(false); // Disable auto-restart on error
+          shouldKeepListeningRef.current = false;
 
           // Fallback to offline mode on network errors
           if (event.error === 'network' || event.error === 'service-not-allowed') {
@@ -573,7 +574,39 @@ export function GlobalVoiceAssistant() {
         };
 
         recognitionRef.current.onend = () => {
+          console.log('Recognition ended. shouldKeepListening:', shouldKeepListeningRef.current, 'hasTimeout:', !!autoStopTimeoutRef.current);
+
+          // Check if we should keep listening (timeout not reached yet)
+          if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
+            // Browser stopped recognition automatically, but we still have time left
+            // Restart it after a short delay
+            console.log('Auto-restarting recognition...');
+            setTimeout(() => {
+              try {
+                if (shouldKeepListeningRef.current) {
+                  recognitionRef.current.start();
+                  console.log('Recognition restarted successfully');
+                }
+              } catch (error) {
+                console.error('Error restarting recognition:', error);
+                setIsListening(false);
+                setShouldKeepListening(false);
+                shouldKeepListeningRef.current = false;
+                if (autoStopTimeoutRef.current) {
+                  clearTimeout(autoStopTimeoutRef.current);
+                  autoStopTimeoutRef.current = null;
+                }
+                releaseMicrophone('voice-assistant');
+              }
+            }, 200); // Small delay before restart
+            return; // Don't clean up, we're continuing
+          }
+
+          // Normal end - user stopped manually or timeout reached
+          console.log('Normal end - cleaning up');
           setIsListening(false);
+          setShouldKeepListening(false);
+          shouldKeepListeningRef.current = false;
 
           // Clear auto-stop timeout
           if (autoStopTimeoutRef.current) {
@@ -1114,7 +1147,7 @@ export function GlobalVoiceAssistant() {
   };
 
   const analyzeAudioContinuously = () => {
-    if (!isAnalyzingAudio) return;
+    if (!isAnalyzingAudio || !analyserRef.current) return;
 
     const bufferLength = analyserRef.current.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -1226,15 +1259,23 @@ export function GlobalVoiceAssistant() {
       // Wait longer before starting to give user time to prepare
       setTimeout(() => {
         setIsListening(true);
+        setShouldKeepListening(true); // Enable auto-restart
+        shouldKeepListeningRef.current = true;
+        console.log('Starting recognition with 15 second timeout...');
+
         try {
           recognitionRef.current.start();
 
-          // Set initial auto-stop timeout
+          // Set initial auto-stop timeout for 15 seconds
           if (autoStopTimeoutRef.current) {
             clearTimeout(autoStopTimeoutRef.current);
           }
           autoStopTimeoutRef.current = setTimeout(() => {
-            if (recognitionRef.current && isListening) {
+            // After 15 seconds, disable auto-restart and stop
+            console.log('15 second timeout reached - stopping recognition');
+            setShouldKeepListening(false);
+            shouldKeepListeningRef.current = false;
+            if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
           }, 15000);
@@ -1249,6 +1290,8 @@ export function GlobalVoiceAssistant() {
           console.error('Error starting recognition:', error);
           releaseMicrophone('voice-assistant');
           setIsListening(false);
+          setShouldKeepListening(false);
+          shouldKeepListeningRef.current = false;
         }
       }, 300);
     } catch (error) {
@@ -1263,6 +1306,10 @@ export function GlobalVoiceAssistant() {
   };
 
   const stopListening = () => {
+    // Disable auto-restart first
+    setShouldKeepListening(false);
+    shouldKeepListeningRef.current = false;
+
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -1326,7 +1373,7 @@ export function GlobalVoiceAssistant() {
 
       {/* Mobile-optimized Voice Assistant Dialog */}
       <AnimatePresence>
-        {isOpen && (console.log('Voice assistant dialog should render - isOpen:', isOpen) || true) && (
+        {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
