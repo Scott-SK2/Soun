@@ -357,13 +357,22 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
         hasMicrophoneRef.current = false;
       }
 
+      // Don't restart if microphone is in use by someone else
+      if (currentUser !== null && currentUser !== 'wake-word') {
+        console.log(`⏸️  Not restarting wake word - microphone in use by: ${currentUser}`);
+        return;
+      }
+
       // Restart wake word listening with longer delay to prevent loop
       if (enabled && !isListeningForCommand && !isRestartingRef.current && isInitializedRef.current && !isWakeWordRunningRef.current) {
         isRestartingRef.current = true;
         setTimeout(() => {
           isRestartingRef.current = false;
-          if (isInitializedRef.current && !isWakeWordRunningRef.current && !hasFatalErrorRef.current) {
+          // Double-check microphone is still available before restarting
+          if (isInitializedRef.current && !isWakeWordRunningRef.current && !hasFatalErrorRef.current && (currentUser === null || currentUser === 'wake-word')) {
             startWakeWordListening();
+          } else {
+            console.log(`⏸️  Skipping wake word restart - microphone in use by: ${currentUser}`);
           }
         }, 3000); // Increased from 2000ms to 3000ms for more stability
       }
