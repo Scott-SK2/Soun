@@ -534,12 +534,12 @@ export function GlobalVoiceAssistant() {
             clearTimeout(autoStopTimeoutRef.current);
           }
 
-          // Auto-stop after 2 seconds of final silence
+          // Auto-stop after 7 seconds of silence to give user time to formulate question
           autoStopTimeoutRef.current = setTimeout(() => {
             if (recognitionRef.current && isListening) {
               recognitionRef.current.stop();
             }
-          }, 2000);
+          }, 7000);
 
           if (lastResult.isFinal) {
             setTranscript(transcript);
