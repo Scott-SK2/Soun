@@ -527,23 +527,25 @@ export function GlobalVoiceAssistant() {
           // Show interim results to user
           if (!lastResult.isFinal) {
             setTranscript(transcript);
+            // Don't set timeout on interim results - keep listening
+            return;
           }
 
-          // Clear any existing timeout
-          if (autoStopTimeoutRef.current) {
-            clearTimeout(autoStopTimeoutRef.current);
-          }
-
-          // Auto-stop after 7 seconds of silence to give user time to formulate question
-          autoStopTimeoutRef.current = setTimeout(() => {
-            if (recognitionRef.current && isListening) {
-              recognitionRef.current.stop();
-            }
-          }, 7000);
-
+          // Only process final results
           if (lastResult.isFinal) {
             setTranscript(transcript);
-            // Don't set isListening to false immediately, let timeout handle it
+
+            // Clear any existing timeout
+            if (autoStopTimeoutRef.current) {
+              clearTimeout(autoStopTimeoutRef.current);
+            }
+
+            // Auto-stop after 15 seconds of silence to give user plenty of time
+            autoStopTimeoutRef.current = setTimeout(() => {
+              if (recognitionRef.current && isListening) {
+                recognitionRef.current.stop();
+              }
+            }, 15000);
 
             if (isOfflineMode) {
               // Store for offline processing
