@@ -379,8 +379,20 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
     };
 
     wakeWordRecognitionRef.current.onerror = (event: any) => {
+      // Ignore "no-speech" error - it's normal when user is not speaking
+      if (event.error === 'no-speech') {
+        console.log('No speech detected by wake word - this is normal, will restart');
+        return; // Let onend handle restart
+      }
+
+      // Ignore "aborted" error - usually happens when we stop recognition manually
+      if (event.error === 'aborted') {
+        console.log('Wake word recognition aborted - likely manual stop');
+        return; // Let onend handle it
+      }
+
       console.error('Wake word recognition error:', event.error);
-      
+
       // Release microphone on error
       if (hasMicrophoneRef.current) {
         releaseMicrophone('wake-word');
@@ -389,7 +401,7 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
 
       // Fatal errors that should stop all retries
       const fatalErrors = ['not-allowed', 'service-not-allowed', 'audio-capture'];
-      
+
       if (fatalErrors.includes(event.error)) {
         // Mark as fatal to prevent infinite retries
         hasFatalErrorRef.current = true;
