@@ -169,6 +169,7 @@ export function GlobalVoiceAssistant() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const audioAnalysisRef = useRef<{
     startTime: number;
     pitchSamples: number[];
@@ -240,6 +241,9 @@ export function GlobalVoiceAssistant() {
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
+      }
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
       }
       cleanupPerformanceServices();
     };
@@ -517,9 +521,6 @@ export function GlobalVoiceAssistant() {
         recognitionRef.current.lang = 'en-US';
         recognitionRef.current.maxAlternatives = 1;
 
-        // Add timeout reference for auto-stop
-        const autoStopTimeoutRef = { current: null as NodeJS.Timeout | null };
-
         recognitionRef.current.onresult = (event: any) => {
           const lastResult = event.results[event.results.length - 1];
           const transcript = lastResult[0].transcript;
@@ -573,6 +574,13 @@ export function GlobalVoiceAssistant() {
 
         recognitionRef.current.onend = () => {
           setIsListening(false);
+
+          // Clear auto-stop timeout
+          if (autoStopTimeoutRef.current) {
+            clearTimeout(autoStopTimeoutRef.current);
+            autoStopTimeoutRef.current = null;
+          }
+
           // Release microphone when done
           releaseMicrophone('voice-assistant');
 
@@ -1221,6 +1229,16 @@ export function GlobalVoiceAssistant() {
         try {
           recognitionRef.current.start();
 
+          // Set initial auto-stop timeout
+          if (autoStopTimeoutRef.current) {
+            clearTimeout(autoStopTimeoutRef.current);
+          }
+          autoStopTimeoutRef.current = setTimeout(() => {
+            if (recognitionRef.current && isListening) {
+              recognitionRef.current.stop();
+            }
+          }, 15000);
+
           // Show a toast to let user know they can speak
           toast({
             title: "🎤 Listening...",
@@ -1247,6 +1265,12 @@ export function GlobalVoiceAssistant() {
   const stopListening = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
+    }
+
+    // Clear auto-stop timeout
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
     }
 
     // Release microphone access
