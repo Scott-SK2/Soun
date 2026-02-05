@@ -1114,7 +1114,7 @@ export function GlobalVoiceAssistant() {
   };
 
   const analyzeAudioContinuously = () => {
-    if (!isAnalyzingAudio) return;
+    if (!isAnalyzingAudio || !analyserRef.current) return;
 
     const bufferLength = analyserRef.current.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
@@ -1326,7 +1326,7 @@ export function GlobalVoiceAssistant() {
 
       {/* Mobile-optimized Voice Assistant Dialog */}
       <AnimatePresence>
-        {isOpen && (console.log('Voice assistant dialog should render - isOpen:', isOpen) || true) && (
+        {isOpen && (
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
