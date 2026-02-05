@@ -512,17 +512,38 @@ export function GlobalVoiceAssistant() {
       recognitionRef.current = new SpeechRecognition();
 
       if (recognitionRef.current) {
-        recognitionRef.current.continuous = false;
+        recognitionRef.current.continuous = true; // Keep listening for longer input
         recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = 'en-US';
+        recognitionRef.current.maxAlternatives = 1;
+
+        // Add timeout reference for auto-stop
+        const autoStopTimeoutRef = { current: null as NodeJS.Timeout | null };
 
         recognitionRef.current.onresult = (event: any) => {
           const lastResult = event.results[event.results.length - 1];
           const transcript = lastResult[0].transcript;
 
+          // Show interim results to user
+          if (!lastResult.isFinal) {
+            setTranscript(transcript);
+          }
+
+          // Clear any existing timeout
+          if (autoStopTimeoutRef.current) {
+            clearTimeout(autoStopTimeoutRef.current);
+          }
+
+          // Auto-stop after 7 seconds of silence to give user time to formulate question
+          autoStopTimeoutRef.current = setTimeout(() => {
+            if (recognitionRef.current && isListening) {
+              recognitionRef.current.stop();
+            }
+          }, 7000);
+
           if (lastResult.isFinal) {
             setTranscript(transcript);
-            setIsListening(false);
+            // Don't set isListening to false immediately, let timeout handle it
 
             if (isOfflineMode) {
               // Store for offline processing
@@ -550,8 +571,10 @@ export function GlobalVoiceAssistant() {
 
         recognitionRef.current.onend = () => {
           setIsListening(false);
+          // Release microphone when done
+          releaseMicrophone('voice-assistant');
 
-          // Auto-restart for push-to-talk mode
+          // Auto-restart for push-to-talk mode only
           if (isPushToTalkMode && pushToTalkActive) {
             setTimeout(() => {
               if (pushToTalkActive) {
@@ -719,9 +742,10 @@ export function GlobalVoiceAssistant() {
       const semanticContext = null;
 
       const sessionId = Date.now().toString(); // Generate simple session ID
-      
+
       const response = await apiRequest('POST', '/api/voice/process', {
         command: transcript,
+        courseId: courseContext, // Send courseId to backend
         sessionId,
         currentPath,
         currentUrl,
@@ -1183,13 +1207,30 @@ export function GlobalVoiceAssistant() {
       }
 
       // Stop any existing recognition first
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore if already stopped
+      }
 
-      // Wait a brief moment before starting
+      // Wait longer before starting to give user time to prepare
       setTimeout(() => {
         setIsListening(true);
-        recognitionRef.current.start();
-      }, 100);
+        try {
+          recognitionRef.current.start();
+
+          // Show a toast to let user know they can speak
+          toast({
+            title: "🎤 Listening...",
+            description: "Speak now, I'm listening for your question",
+            duration: 3000
+          });
+        } catch (error) {
+          console.error('Error starting recognition:', error);
+          releaseMicrophone('voice-assistant');
+          setIsListening(false);
+        }
+      }, 300);
     } catch (error) {
       console.error('Error starting speech recognition:', error);
       releaseMicrophone('voice-assistant');
@@ -1320,6 +1361,17 @@ export function GlobalVoiceAssistant() {
                     🎤 {audioQuality}
                   </div>
                 </div>
+
+                {/* Real-time Transcript Display */}
+                {isListening && transcript && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 animate-pulse">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Mic className="h-4 w-4 text-blue-600 animate-pulse" />
+                      <span className="text-xs font-medium text-blue-700">You're saying:</span>
+                    </div>
+                    <p className="text-sm text-blue-900">{transcript}</p>
+                  </div>
+                )}
 
                 {/* Mobile-optimized Conversation History */}
                 <div className="max-h-48 md:max-h-64 overflow-y-auto space-y-2 bg-gray-50 rounded-lg p-2 md:p-3">
