@@ -29,7 +29,7 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
   const [lastCommand, setLastCommand] = useState<string>('');
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { requestMicrophone, releaseMicrophone } = useSpeechRecognitionCoordinator();
+  const { requestMicrophone, releaseMicrophone, currentUser } = useSpeechRecognitionCoordinator();
   
   const wakeWordRecognitionRef = useRef<any>(null);
   const commandRecognitionRef = useRef<any>(null);
@@ -498,6 +498,24 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, wakeWord]); // Removed circular dependencies that cause re-initialization
+
+  // Stop wake word recognition when another component takes the microphone
+  useEffect(() => {
+    if (currentUser !== 'wake-word' && currentUser !== null && isWakeWordRunningRef.current) {
+      console.log(`🛑 Wake word stopping - microphone taken by: ${currentUser}`);
+      if (wakeWordRecognitionRef.current) {
+        try {
+          wakeWordRecognitionRef.current.stop();
+          isWakeWordRunningRef.current = false;
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+      hasMicrophoneRef.current = false;
+      setIsListeningForCommand(false);
+      setIsWakeWordActive(false);
+    }
+  }, [currentUser]);
 
   const stopListening = useCallback(() => {
     if (wakeWordRecognitionRef.current) {
