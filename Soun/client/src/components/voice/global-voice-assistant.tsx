@@ -571,16 +571,21 @@ export function GlobalVoiceAssistant() {
         };
 
         recognitionRef.current.onend = () => {
+          console.log('🔚 Recognition ended. shouldKeepListening:', shouldKeepListeningRef.current, 'hasTimeout:', !!autoStopTimeoutRef.current);
+
           // Check if we should keep listening (timeout not reached yet)
           if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
             // Browser stopped recognition automatically, but we still have time left
             // Restart it after a short delay
+            console.log('🔄 Auto-restarting recognition...');
             setTimeout(() => {
               try {
                 if (shouldKeepListeningRef.current) {
                   recognitionRef.current.start();
+                  console.log('✅ Recognition restarted successfully');
                 }
               } catch (error) {
+                console.error('❌ Error restarting recognition:', error);
                 setIsListening(false);
                 setShouldKeepListening(false);
                 shouldKeepListeningRef.current = false;
@@ -595,6 +600,7 @@ export function GlobalVoiceAssistant() {
           }
 
           // Normal end - user stopped manually or timeout reached
+          console.log('🛑 Final stop - cleaning up');
           setIsListening(false);
           setShouldKeepListening(false);
           shouldKeepListeningRef.current = false;
@@ -1254,18 +1260,20 @@ export function GlobalVoiceAssistant() {
 
         try {
           recognitionRef.current.start();
+          console.log('🎤 Voice assistant started - 20 second timer begins');
 
-          // Set auto-stop timeout for 15 seconds
+          // Set auto-stop timeout for 20 seconds
           if (autoStopTimeoutRef.current) {
             clearTimeout(autoStopTimeoutRef.current);
           }
           autoStopTimeoutRef.current = setTimeout(() => {
+            console.log('⏰ 20 seconds reached - stopping recognition');
             setShouldKeepListening(false);
             shouldKeepListeningRef.current = false;
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 15000);
+          }, 20000);
 
           toast({
             title: "🎤 Listening...",
@@ -1273,6 +1281,7 @@ export function GlobalVoiceAssistant() {
             duration: 3000
           });
         } catch (error) {
+          console.error('❌ Error starting recognition:', error);
           releaseMicrophone('voice-assistant');
           setIsListening(false);
           setShouldKeepListening(false);
