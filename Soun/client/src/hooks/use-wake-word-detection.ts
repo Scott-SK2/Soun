@@ -29,7 +29,7 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
   const [lastCommand, setLastCommand] = useState<string>('');
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { requestMicrophone, releaseMicrophone } = useSpeechRecognitionCoordinator();
+  const { requestMicrophone, releaseMicrophone, currentUser } = useSpeechRecognitionCoordinator();
   
   const wakeWordRecognitionRef = useRef<any>(null);
   const commandRecognitionRef = useRef<any>(null);
@@ -163,25 +163,22 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
 
     // Prevent multiple starts
     if (isWakeWordRunningRef.current) {
-      console.log('⏸️  Wake word already running, skipping start');
       return;
     }
 
     // Don't retry if we've hit a fatal error (like microphone permission denied)
     if (hasFatalErrorRef.current) {
-      console.log('❌ Wake word disabled due to previous fatal error');
       return;
     }
 
     // Request microphone access
     if (!requestMicrophone('wake-word')) {
-      console.log('⏳ Wake word waiting for microphone... will retry');
       // Retry after a delay if microphone is not available
       setTimeout(() => {
         if (enabled && !isWakeWordRunningRef.current) {
           startWakeWordListening();
         }
-      }, 3000); // Increased retry delay
+      }, 3000);
       return;
     }
 
@@ -209,33 +206,25 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
         try {
           wakeWordRecognitionRef.current.start();
           isWakeWordRunningRef.current = true;
-          console.log('👂 Wake word listening started');
         } catch (error: any) {
           isWakeWordRunningRef.current = false;
           if (error.message !== 'recognition has already been started') {
-            console.error('Failed to start wake word recognition:', {
-              error,
-              message: error?.message,
-              name: error?.name,
-              stack: error?.stack
-            });
             if (hasMicrophoneRef.current) {
               releaseMicrophone('wake-word');
               hasMicrophoneRef.current = false;
             }
-            
+
             // Retry after a longer delay if start fails
             setTimeout(() => {
               if (enabled && !isWakeWordRunningRef.current) {
                 startWakeWordListening();
               }
-            }, 3000); // Increased retry delay
+            }, 3000);
           }
         }
-      }, 300); // Increased from 100ms to 300ms
+      }, 300);
     } catch (error: any) {
       isWakeWordRunningRef.current = false;
-      console.error('Error in startWakeWordListening:', error);
       if (hasMicrophoneRef.current) {
         releaseMicrophone('wake-word');
         hasMicrophoneRef.current = false;
@@ -347,7 +336,6 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
 
       // Don't restart if we've hit a fatal error
       if (hasFatalErrorRef.current) {
-        console.log('❌ Not restarting wake word due to fatal error');
         return;
       }
 
@@ -357,21 +345,34 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
         hasMicrophoneRef.current = false;
       }
 
+      // Don't restart if microphone is in use by someone else
+      if (currentUser !== null && currentUser !== 'wake-word') {
+        return;
+      }
+
       // Restart wake word listening with longer delay to prevent loop
       if (enabled && !isListeningForCommand && !isRestartingRef.current && isInitializedRef.current && !isWakeWordRunningRef.current) {
         isRestartingRef.current = true;
         setTimeout(() => {
           isRestartingRef.current = false;
-          if (isInitializedRef.current && !isWakeWordRunningRef.current && !hasFatalErrorRef.current) {
+          if (isInitializedRef.current && !isWakeWordRunningRef.current && !hasFatalErrorRef.current && (currentUser === null || currentUser === 'wake-word')) {
             startWakeWordListening();
           }
-        }, 3000); // Increased from 2000ms to 3000ms for more stability
+        }, 3000);
       }
     };
 
     wakeWordRecognitionRef.current.onerror = (event: any) => {
-      console.error('Wake word recognition error:', event.error);
-      
+      // Ignore "no-speech" error - it's normal when user is not speaking
+      if (event.error === 'no-speech') {
+        return;
+      }
+
+      // Ignore "aborted" error - usually happens when we stop recognition manually
+      if (event.error === 'aborted') {
+        return;
+      }
+
       // Release microphone on error
       if (hasMicrophoneRef.current) {
         releaseMicrophone('wake-word');
@@ -380,7 +381,7 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
 
       // Fatal errors that should stop all retries
       const fatalErrors = ['not-allowed', 'service-not-allowed', 'audio-capture'];
-      
+
       if (fatalErrors.includes(event.error)) {
         // Mark as fatal to prevent infinite retries
         hasFatalErrorRef.current = true;
@@ -498,6 +499,23 @@ export function useWakeWordDetection(options: WakeWordOptions = {}) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, wakeWord]); // Removed circular dependencies that cause re-initialization
+
+  // Stop wake word recognition when another component takes the microphone
+  useEffect(() => {
+    if (currentUser !== 'wake-word' && currentUser !== null && isWakeWordRunningRef.current) {
+      if (wakeWordRecognitionRef.current) {
+        try {
+          wakeWordRecognitionRef.current.stop();
+          isWakeWordRunningRef.current = false;
+        } catch (err) {
+          // Ignore errors
+        }
+      }
+      hasMicrophoneRef.current = false;
+      setIsListeningForCommand(false);
+      setIsWakeWordActive(false);
+    }
+  }, [currentUser]);
 
   const stopListening = useCallback(() => {
     if (wakeWordRecognitionRef.current) {
