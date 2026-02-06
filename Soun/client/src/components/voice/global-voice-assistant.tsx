@@ -1255,7 +1255,7 @@ export function GlobalVoiceAssistant() {
         try {
           recognitionRef.current.start();
 
-          // Set auto-stop timeout for 15 seconds
+          // Set auto-stop timeout for 20 seconds
           if (autoStopTimeoutRef.current) {
             clearTimeout(autoStopTimeoutRef.current);
           }
@@ -1265,7 +1265,7 @@ export function GlobalVoiceAssistant() {
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 15000);
+          }, 20000);
 
           toast({
             title: "🎤 Listening...",
