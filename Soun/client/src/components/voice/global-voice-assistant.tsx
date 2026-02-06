@@ -550,16 +550,13 @@ export function GlobalVoiceAssistant() {
         };
 
         recognitionRef.current.onerror = (event: any) => {
-          console.error('Recognition error:', event.error);
-
           // Don't stop on "no-speech" error - this is normal when user is silent
           if (event.error === 'no-speech') {
-            console.log('No speech detected, but continuing to listen...');
             return; // Don't stop, let onend handle it
           }
 
           setIsListening(false);
-          setShouldKeepListening(false); // Disable auto-restart on error
+          setShouldKeepListening(false);
           shouldKeepListeningRef.current = false;
 
           // Fallback to offline mode on network errors
@@ -574,21 +571,16 @@ export function GlobalVoiceAssistant() {
         };
 
         recognitionRef.current.onend = () => {
-          console.log('Recognition ended. shouldKeepListening:', shouldKeepListeningRef.current, 'hasTimeout:', !!autoStopTimeoutRef.current);
-
           // Check if we should keep listening (timeout not reached yet)
           if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
             // Browser stopped recognition automatically, but we still have time left
             // Restart it after a short delay
-            console.log('Auto-restarting recognition...');
             setTimeout(() => {
               try {
                 if (shouldKeepListeningRef.current) {
                   recognitionRef.current.start();
-                  console.log('Recognition restarted successfully');
                 }
               } catch (error) {
-                console.error('Error restarting recognition:', error);
                 setIsListening(false);
                 setShouldKeepListening(false);
                 shouldKeepListeningRef.current = false;
@@ -598,12 +590,11 @@ export function GlobalVoiceAssistant() {
                 }
                 releaseMicrophone('voice-assistant');
               }
-            }, 200); // Small delay before restart
-            return; // Don't clean up, we're continuing
+            }, 200);
+            return;
           }
 
           // Normal end - user stopped manually or timeout reached
-          console.log('Normal end - cleaning up');
           setIsListening(false);
           setShouldKeepListening(false);
           shouldKeepListeningRef.current = false;
@@ -1256,23 +1247,19 @@ export function GlobalVoiceAssistant() {
         // Ignore if already stopped
       }
 
-      // Wait longer before starting to give user time to prepare
       setTimeout(() => {
         setIsListening(true);
-        setShouldKeepListening(true); // Enable auto-restart
+        setShouldKeepListening(true);
         shouldKeepListeningRef.current = true;
-        console.log('Starting recognition with 15 second timeout...');
 
         try {
           recognitionRef.current.start();
 
-          // Set initial auto-stop timeout for 15 seconds
+          // Set auto-stop timeout for 15 seconds
           if (autoStopTimeoutRef.current) {
             clearTimeout(autoStopTimeoutRef.current);
           }
           autoStopTimeoutRef.current = setTimeout(() => {
-            // After 15 seconds, disable auto-restart and stop
-            console.log('15 second timeout reached - stopping recognition');
             setShouldKeepListening(false);
             shouldKeepListeningRef.current = false;
             if (recognitionRef.current) {
@@ -1280,14 +1267,12 @@ export function GlobalVoiceAssistant() {
             }
           }, 15000);
 
-          // Show a toast to let user know they can speak
           toast({
             title: "🎤 Listening...",
             description: "Speak now, I'm listening for your question",
             duration: 3000
           });
         } catch (error) {
-          console.error('Error starting recognition:', error);
           releaseMicrophone('voice-assistant');
           setIsListening(false);
           setShouldKeepListening(false);

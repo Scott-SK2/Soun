@@ -18,25 +18,21 @@ export function SpeechRecognitionProvider({ children }: { children: ReactNode })
   const requestMicrophone = useCallback((user: SpeechRecognitionUser): boolean => {
     // Voice assistant has priority - force release if wake-word has it
     if (user === 'voice-assistant' && lockRef.current === 'wake-word') {
-      console.log(`🎤 Voice assistant taking priority - forcing wake-word to release`);
       lockRef.current = user;
       setCurrentUser(user);
       return true;
     }
 
     if (lockRef.current === null || lockRef.current === user) {
-      console.log(`🎤 Microphone granted to: ${user}`);
       lockRef.current = user;
       setCurrentUser(user);
       return true;
     }
-    console.log(`🚫 Microphone denied to ${user} (in use by ${lockRef.current})`);
     return false;
   }, []);
 
   const releaseMicrophone = useCallback((user: SpeechRecognitionUser) => {
     if (lockRef.current === user) {
-      console.log(`🎤 Microphone released by: ${user}`);
       lockRef.current = null;
       setCurrentUser(null);
     }
