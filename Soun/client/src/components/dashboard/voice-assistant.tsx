@@ -19,6 +19,7 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   const [transcript, setTranscript] = useState("");
   const [response, setResponse] = useState("");
   const [sessionId] = useState(() => `session-${Date.now()}`);
+  const [shouldKeepListening, setShouldKeepListening] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<Array<{
     type: 'user' | 'assistant';
     message: string;
@@ -27,6 +28,8 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   }>>([]);
 
   const recognitionRef = useRef<any>(null);
+  const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldKeepListeningRef = useRef<boolean>(false);
   const { toast } = useToast();
   const textToSpeechHook = useTextToSpeech();
   const { speak, cancel, speaking } = textToSpeechHook;
@@ -45,23 +48,79 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
       recognitionRef.current = new SpeechRecognition();
 
       if (recognitionRef.current) {
-        recognitionRef.current.continuous = false;
+        recognitionRef.current.continuous = true; // Keep listening for 20 seconds
         recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onresult = (event: any) => {
           const lastResult = event.results[event.results.length - 1];
+          const transcript = lastResult[0].transcript;
+
+          // Show interim results
+          if (!lastResult.isFinal) {
+            setTranscript(transcript);
+            return;
+          }
+
+          // Process final result
           if (lastResult.isFinal) {
-            setTranscript(lastResult[0].transcript);
-            setIsListening(false);
-            processCommand(lastResult[0].transcript);
+            setTranscript(transcript);
+            processCommand(transcript);
           }
         };
 
-        recognitionRef.current.onerror = () => setIsListening(false);
-        recognitionRef.current.onend = () => setIsListening(false);
+        recognitionRef.current.onerror = (event: any) => {
+          // Ignore no-speech error
+          if (event.error === 'no-speech') {
+            return;
+          }
+          setIsListening(false);
+          setShouldKeepListening(false);
+          shouldKeepListeningRef.current = false;
+        };
+
+        recognitionRef.current.onend = () => {
+          // Auto-restart if still within 20 second window
+          if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
+            setTimeout(() => {
+              try {
+                if (shouldKeepListeningRef.current) {
+                  recognitionRef.current.start();
+                }
+              } catch (error) {
+                setIsListening(false);
+                setShouldKeepListening(false);
+                shouldKeepListeningRef.current = false;
+                if (autoStopTimeoutRef.current) {
+                  clearTimeout(autoStopTimeoutRef.current);
+                  autoStopTimeoutRef.current = null;
+                }
+              }
+            }, 200);
+            return;
+          }
+
+          // Normal end
+          setIsListening(false);
+          setShouldKeepListening(false);
+          shouldKeepListeningRef.current = false;
+        };
       }
     }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+      }
+      shouldKeepListeningRef.current = false;
+    };
   }, []);
 
   // Process voice commands using AI only
@@ -129,8 +188,30 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
       setIsListening(true);
+      setShouldKeepListening(true);
+      shouldKeepListeningRef.current = true;
       setTranscript("");
+
+      // Start recognition
       recognitionRef.current.start();
+
+      // Set 20 second timeout
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+      }
+      autoStopTimeoutRef.current = setTimeout(() => {
+        setShouldKeepListening(false);
+        shouldKeepListeningRef.current = false;
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+      }, 20000);
+
+      toast({
+        title: "🎤 Listening...",
+        description: "Ask me about your course materials!",
+        duration: 3000
+      });
     } else {
       toast({
         title: "Speech Recognition Unavailable",
@@ -141,6 +222,14 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   };
 
   const stopListening = () => {
+    setShouldKeepListening(false);
+    shouldKeepListeningRef.current = false;
+
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
+
     if (recognitionRef.current && isListening) {
       recognitionRef.current.stop();
       setIsListening(false);
