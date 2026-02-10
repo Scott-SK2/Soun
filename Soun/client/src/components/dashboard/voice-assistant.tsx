@@ -41,6 +41,29 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
     }
   }, [speaking]);
 
+  // Stop listening when assistant starts speaking to avoid audio loop
+  useEffect(() => {
+    if (isSpeaking && isListening) {
+      // Assistant is speaking, stop listening immediately
+      setShouldKeepListening(false);
+      shouldKeepListeningRef.current = false;
+
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+      setIsListening(false);
+    }
+  }, [isSpeaking, isListening]);
+
   // Initialize speech recognition
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -80,11 +103,24 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
         };
 
         recognitionRef.current.onend = () => {
+          // Don't restart if assistant is speaking (avoid audio loop)
+          if (speaking) {
+            setIsListening(false);
+            setShouldKeepListening(false);
+            shouldKeepListeningRef.current = false;
+            if (autoStopTimeoutRef.current) {
+              clearTimeout(autoStopTimeoutRef.current);
+              autoStopTimeoutRef.current = null;
+            }
+            return;
+          }
+
           // Auto-restart if still within 20 second window
           if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
             setTimeout(() => {
               try {
-                if (shouldKeepListeningRef.current) {
+                // Double-check assistant is not speaking before restarting
+                if (shouldKeepListeningRef.current && !speaking) {
                   recognitionRef.current.start();
                 }
               } catch (error) {
@@ -147,6 +183,24 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
     onSuccess: (data) => {
       setResponse(data.response);
 
+      // Stop listening immediately when we get a response
+      setShouldKeepListening(false);
+      shouldKeepListeningRef.current = false;
+
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+
+      if (recognitionRef.current && isListening) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+      setIsListening(false);
+
       setConversationHistory(prev => [
         ...prev.slice(-4),
         {
@@ -186,6 +240,16 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   };
 
   const startListening = () => {
+    // Don't start listening if assistant is speaking (avoid audio loop)
+    if (isSpeaking) {
+      toast({
+        title: "Please Wait",
+        description: "Let me finish speaking first!",
+        variant: "default"
+      });
+      return;
+    }
+
     if (recognitionRef.current && !isListening) {
       setIsListening(true);
       setShouldKeepListening(true);
