@@ -22,17 +22,28 @@ export function useSpeechRecognition(options: SpeechRecognitionOptions = {}) {
       recognitionRef.current = new SpeechRecognition();
       
       const recognition = recognitionRef.current;
-      recognition.continuous = options.continuous ?? false;
+      recognition.continuous = options.continuous ?? true;
       recognition.interimResults = options.interimResults ?? true;
       recognition.lang = options.language ?? 'en-US';
       
       recognition.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const transcript = event.results[current][0].transcript;
+        let finalTranscript = "";
+        let interimTranscript = "";
         
-        if (event.results[current].isFinal) {
-          setTranscript(transcript);
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const text = event.results[i][0].transcript;
+          
+          if (event.results[i].isFinal) {
+            finalTranscript += text;
+          } else {
+            interimTranscript += text;
+          }
         }
+        
+        setTranscript((prev) => {
+          const combined = `${prev} ${finalTranscript || interimTranscript}`.trim();
+          return combined;
+        });
       };
       
       recognition.onstart = () => setIsListening(true);
@@ -55,10 +66,14 @@ export function useSpeechRecognition(options: SpeechRecognitionOptions = {}) {
   }, [isListening]);
   
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.error('Failed to stop speech recognition:', error)
+      }
     }
-  }, [isListening]);
+  }, []);
   
   const resetTranscript = useCallback(() => {
     setTranscript('');

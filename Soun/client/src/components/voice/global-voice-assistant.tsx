@@ -514,117 +514,95 @@ export function GlobalVoiceAssistant() {
 
   // Initialize speech recognition with offline fallback
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-
-      if (recognitionRef.current) {
-        recognitionRef.current.continuous = true; // Keep listening for longer input
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'en-US';
-        recognitionRef.current.maxAlternatives = 1;
-
-        recognitionRef.current.onresult = (event: any) => {
-          const lastResult = event.results[event.results.length - 1];
-          const transcript = lastResult[0].transcript;
-
-          // Show interim results to user
-          if (!lastResult.isFinal) {
-            setTranscript(transcript);
-            // Don't set timeout on interim results - keep listening
-            return;
-          }
-
-          // Only process final results
-          if (lastResult.isFinal) {
-            setTranscript(transcript);
-
-            if (isOfflineMode) {
-              // Store for offline processing
-              offlineTranscriptRef.current = transcript;
-              handleOfflineCommand(transcript);
-            } else {
-              processCommand(transcript);
-            }
-          }
-        };
-
-        recognitionRef.current.onerror = (event: any) => {
-          // Don't stop on "no-speech" error - this is normal when user is silent
-          if (event.error === 'no-speech') {
-            return; // Don't stop, let onend handle it
-          }
-
-          setIsListening(false);
-          setShouldKeepListening(false);
-          shouldKeepListeningRef.current = false;
-
-          // Fallback to offline mode on network errors
-          if (event.error === 'network' || event.error === 'service-not-allowed') {
-            setIsOfflineMode(true);
-            toast({
-              title: "Network Error",
-              description: "Switching to offline voice recognition.",
-              variant: "destructive",
-            });
-          }
-        };
-
-        recognitionRef.current.onend = () => {
-          console.log('🔚 Recognition ended. shouldKeepListening:', shouldKeepListeningRef.current, 'hasTimeout:', !!autoStopTimeoutRef.current);
-
-          // Check if we should keep listening (timeout not reached yet)
-          if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
-            // Browser stopped recognition automatically, but we still have time left
-            // Restart it after a short delay
-            console.log('🔄 Auto-restarting recognition...');
-            setTimeout(() => {
-              try {
-                if (shouldKeepListeningRef.current) {
-                  recognitionRef.current.start();
-                  console.log('✅ Recognition restarted successfully');
-                }
-              } catch (error) {
-                console.error('❌ Error restarting recognition:', error);
-                setIsListening(false);
-                setShouldKeepListening(false);
-                shouldKeepListeningRef.current = false;
-                if (autoStopTimeoutRef.current) {
-                  clearTimeout(autoStopTimeoutRef.current);
-                  autoStopTimeoutRef.current = null;
-                }
-                releaseMicrophone('voice-assistant');
-              }
-            }, 200);
-            return;
-          }
-
-          // Normal end - user stopped manually or timeout reached
-          console.log('🛑 Final stop - cleaning up');
-          setIsListening(false);
-          setShouldKeepListening(false);
-          shouldKeepListeningRef.current = false;
-
-          // Clear auto-stop timeout
-          if (autoStopTimeoutRef.current) {
-            clearTimeout(autoStopTimeoutRef.current);
-            autoStopTimeoutRef.current = null;
-          }
-
-          // Release microphone when done
-          releaseMicrophone('voice-assistant');
-
-          // Auto-restart for push-to-talk mode only
-          if (isPushToTalkMode && pushToTalkActive) {
-            setTimeout(() => {
-              if (pushToTalkActive) {
-                startListening();
-              }
-            }, 100);
-          }
-        };
-      }
+    if (isOfflineMode) return;
+    
+    const SpeechRecognition =
+    
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported in this browser");
+      return;
     }
+    
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+    recognitionRef.current.lang = "en-US";
+    
+    recognitionRef.current.onresult = (event: any) => {
+      let fullTranscript = "";
+      
+      for (let i = 0; i < event.results.length; i++) {
+        fullTranscript += event.results[i][0].transcript + " ";
+      }
+      
+      fullTranscript = fullTranscript.trim();
+      
+      console.log("🎤 Full transcript:", fullTranscript);
+      setCurrentTranscript(fullTranscript);
+    };
+    
+    recognitionRef.current.onend = () => {
+      console.log(
+        "🔚 Recognition ended. shouldKeepListening:",
+        shouldKeepListeningRef.current,
+        "hasTimeout:",
+        !!autoStopTimeoutRef.current
+      );
+      
+      if (shouldKeepListeningRef.current && autoStopTimeoutRef.current) {
+        console.log("🔄 Auto-restarting recognition...");
+        
+        setTimeout(() => {
+          if (!shouldKeepListeningRef.current || !recognitionRef.current) {
+            return;
+          }
+          
+          try {
+            recognitionRef.current.start();
+            setIsListening(true);
+            console.log("✅ Recognition restarted successfully");
+          } catch (error) {
+            console.warn("Recognition restart skipped:", error);
+          }
+        }, 500);
+        
+        return;
+      }
+      
+      console.log("🛑 Final stop - cleaning up");
+      setIsListening(false);
+      setShouldKeepListening(false);
+      shouldKeepListeningRef.current = false;
+      
+      if (autoStopTimeoutRef.current) {
+        clearTimeout(autoStopTimeoutRef.current);
+        autoStopTimeoutRef.current = null;
+      }
+      
+      releaseMicrophone("voice-assistant");
+      
+      if (isPushToTalkMode && pushToTalkActive) {
+        setTimeout(() => {
+          if (pushToTalkActive) {
+            startListening();
+          }
+        }, 100);
+      }
+    };
+    
+    recognitionRef.current.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+    };
+    
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+    };
   }, [isOfflineMode, isPushToTalkMode, pushToTalkActive]);
 
   // Handle offline voice commands
@@ -783,18 +761,15 @@ export function GlobalVoiceAssistant() {
 
       const sessionId = Date.now().toString(); // Generate simple session ID
 
-      const response = await apiRequest('POST', '/api/voice/process', {
+      console.log("✅ USING PYTHON TUTOR ROUTE", transcript);
+
+      const response = await apiRequest('POST', '/api/tutor/ask', {
         command: transcript,
-        courseId: courseContext, // Send courseId to backend
-        sessionId,
-        currentPath,
-        currentUrl,
-        userId: user?.id,
-        semanticContext: semanticContext || {},
-        processedText: processedText
+        courseId: courseContext, 
       });
 
       const result = await response.json();
+      return data;
 
       // Cache the response for future use
       if (result.response) {
@@ -1273,7 +1248,7 @@ export function GlobalVoiceAssistant() {
             if (recognitionRef.current) {
               recognitionRef.current.stop();
             }
-          }, 20000);
+          }, 60000);
 
           toast({
             title: "🎤 Listening...",

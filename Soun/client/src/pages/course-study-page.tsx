@@ -84,7 +84,12 @@ export default function CourseStudyPage() {
     }
   });
 
-  const course = courses.find((c: Course) => c.courseId === courseId);
+  const course = courses.find(
+    (c: any) =>
+      String(c.id) === String(courseId) ||
+      String(c.courseId) === String(courseId) ||
+      String(c.courseID) === String(courseId)
+  );
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

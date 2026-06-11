@@ -30,9 +30,12 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
   const recognitionRef = useRef<any>(null);
   const autoStopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shouldKeepListeningRef = useRef<boolean>(false);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fullTranscriptRef = useRef("");
   const { toast } = useToast();
   const textToSpeechHook = useTextToSpeech();
   const { speak, cancel, speaking } = textToSpeechHook;
+  const [currentCheck, setCurrentCheck] = useState<string | null>(null);
 
   // Update speaking state when TTS speaking state changes
   useEffect(() => {
@@ -76,20 +79,32 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onresult = (event: any) => {
-          const lastResult = event.results[event.results.length - 1];
-          const transcript = lastResult[0].transcript;
-
-          // Show interim results
-          if (!lastResult.isFinal) {
-            setTranscript(transcript);
-            return;
+          let fullTranscript = "";
+          
+          for (let i = 0; i < event.results.length; i++) {
+            fullTranscript += event.results[i][0].transcript + " ";
           }
-
-          // Process final result
-          if (lastResult.isFinal) {
-            setTranscript(transcript);
-            processCommand(transcript);
+          
+          fullTranscript = fullTranscript.trim();
+          
+          setTranscript(fullTranscript);
+          fullTranscriptRef.current = fullTranscript;
+          
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
           }
+          
+          silenceTimeoutRef.current = setTimeout(() => {
+            const finalText = fullTranscriptRef.current.trim();
+            
+            if (finalText) {
+              processCommand(finalText);
+            }
+            
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+            }
+          }, 5000);
         };
 
         recognitionRef.current.onerror = (event: any) => {
@@ -159,79 +174,172 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
     };
   }, []);
 
-  // Process voice commands using AI only
-  const processVoiceCommand = useMutation({
-    mutationFn: async (command: string) => {
-      const currentPath = window.location.pathname;
-      const courseMatch = currentPath.match(/\/courses\/([^\/]+)/);
-      const detectedCourseId = courseMatch ? courseMatch[1] : courseId;
 
-      const payload = {
-        command,
-        courseId: detectedCourseId,
-        sessionId,
-        context: {
-          path: currentPath,
-          page: currentPath.split('/')[1] || 'dashboard',
-          timestamp: new Date().toISOString()
+// Process voice commands using AI only
+const processVoiceCommand = useMutation({
+  mutationFn: async (command: string) => {
+    const currentPath = window.location.pathname;
+    const courseMatch = currentPath.match(/\/courses\/([^\/]+)/);
+    const detectedCourseId = courseMatch ? courseMatch[1] : courseId;
+    
+    if (currentCheck) {
+      const lower = command.toLowerCase();
+
+      const isConfused =
+      lower.includes("don't understand") ||
+      lower.includes("confused") ||
+      lower.includes("don't get it") ||
+      lower.includes("not clear");
+      
+      const wantsExample = lower.includes("example");
+      
+      const wantsSimpler =
+      lower.includes("simpler") ||
+      lower.includes("simplify") ||
+      lower.includes("simply") ||
+      lower.includes("simple") ||
+      lower.includes("easy") ||
+      lower.includes("explain it more simply");
+      
+      const wantsRepeat =
+      lower.includes("repeat") ||
+      lower.includes("say that again");
+
+      const isQuestion =
+      lower.startsWith("what is") ||
+      lower.startsWith("what are") ||
+      lower.startsWith("why") ||
+      lower.startsWith("how") ||
+      lower.startsWith("can you explain") ||
+      lower.includes("?")
+      
+      if (isConfused || wantsExample || wantsSimpler || wantsRepeat || isQuestion) {
+        console.log("🧠 QUESTION/INTENT DETECTED", command);
+        
+        const response = await apiRequest("POST", "/api/tutor/ask", {
+          question: command,
+          courseId: detectedCourseId,
+        });
+        
+        const data = await response.json();
+        console.log("RETURNING ASK DATA", data);
+        return data;
+      }
+      
+      console.log("✅ GRADING STUDENT ANSWER", command);
+      
+      const response = await apiRequest("POST", "/api/tutor/grade", {
+        check_question: currentCheck,
+        student_answer: command,
+      });
+      
+      const data = await response.json();
+      console.log("RETURNING GRADE DATA", data);
+      return data;
+    }
+    
+    console.log("✅ ASKING PYTHON TUTOR", command);
+    
+    const response = await apiRequest("POST", "/api/tutor/ask", {
+      question: command,
+      courseId: detectedCourseId,
+    });
+    
+    const data = await response.json();
+    console.log("RETURNING ASK DATA", data);
+    return data;
+  },
+
+  onSuccess: (data) => {
+    if (!data) {
+      console.error("No data returned from voice mutation");
+      setResponse("I heard you, but I couldn't process the response.");
+      return;
+    }
+    setResponse(data.message || data.response);
+    setCurrentCheck(data.next_check || null);
+
+    // Stop listening immediately when we get a response
+    setShouldKeepListening(false);
+    shouldKeepListeningRef.current = false;
+
+    if (autoStopTimeoutRef.current) {
+      clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
+
+    if (recognitionRef.current && isListening) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // Ignore if already stopped
+      }
+    }
+
+    setIsListening(false);
+
+    setConversationHistory(prev => [
+      ...prev.slice(-4),
+      {
+        type: 'user',
+        message: transcript,
+        timestamp: new Date()
+      },
+      {
+        type: 'assistant',
+        message: data.message || data.response,
+        timestamp: new Date(),
+        courseContext: data.courseContext
+      },
+      
+      ...(data.next_check ? [{
+        type: 'assistant',
+        message: data.next_check,
+        timestamp: new Date(),
+        isCheck: true,
+      }] : [])
+    ]);
+
+    // Speak the response using voice settings
+    const assistantMessage = data.message || data.response;
+
+    if (assistantMessage) {
+      // Cancel previous speech just in case
+      speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(assistantMessage);
+      
+      utterance.onend = () => {
+        if (data.next_check) {
+          speak(data.next_check);
         }
       };
-
-      const response = await apiRequest("POST", "/api/voice/process", payload);
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      setResponse(data.response);
-
-      // Stop listening immediately when we get a response
-      setShouldKeepListening(false);
-      shouldKeepListeningRef.current = false;
-
-      if (autoStopTimeoutRef.current) {
-        clearTimeout(autoStopTimeoutRef.current);
-        autoStopTimeoutRef.current = null;
-      }
-
-      if (recognitionRef.current && isListening) {
-        try {
-          recognitionRef.current.stop();
-        } catch (e) {
-          // Ignore if already stopped
-        }
-      }
-      setIsListening(false);
-
-      setConversationHistory(prev => [
-        ...prev.slice(-4),
-        {
-          type: 'user',
-          message: transcript,
-          timestamp: new Date()
-        },
-        {
-          type: 'assistant',
-          message: data.response,
-          timestamp: new Date(),
-          courseContext: data.courseContext
-        }
-      ]);
-
-      // Speak the response using voice settings
-      if (data.response) {
-        speak(data.response);
-      }
-    },
-    onError: (error) => {
-      console.error("Voice processing error:", error);
-      const errorMessage = "I'm unable to process your request right now. Please check your connection and try again.";
-      setResponse(errorMessage);
-      toast({
-        title: "Voice Processing Error",
-        description: errorMessage,
-        variant: "destructive"
-      });
+      
+      speechSynthesis.speak(utterance);
     }
-  });
+    if (data.next_check) {
+      setCurrentCheck(data.next_check);
+    } else {
+      setCurrentCheck(null);
+    }
+  },
+
+  onError: (error) => {
+    console.error("Voice processing error:", error);
+
+    const errorMessage =
+      "I'm unable to process your request right now. Please check your connection and try again.";
+
+    setResponse(errorMessage);
+
+    toast({
+      title: "Voice Processing Error",
+      description: errorMessage,
+      variant: "destructive"
+    });
+  }
+});
+
 
   const processCommand = (command: string) => {
     if (command.trim()) {
@@ -269,7 +377,7 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
         if (recognitionRef.current) {
           recognitionRef.current.stop();
         }
-      }, 20000);
+      }, 60000);
 
       toast({
         title: "🎤 Listening...",

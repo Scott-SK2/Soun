@@ -49,31 +49,36 @@ class VoiceAssistantService {
     
     // Process with backend
     try {
-      const response = await fetch('/api/voice/process', {
+      const response = await fetch('/api/tutor/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          command: text,
-          context,
-          history: this.conversationHistory.slice(-5) // Last 5 interactions
+          question: command,
         })
       });
       
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       
       const data = await response.json();
+      
       return {
-        text: data.response,
-        action: data.action,
-        data: data.data
+        success: true,
+        response: data.message,
+        message: data.message,
+        next_check: data.next_check,
+        target_concept: data.target_concept,
       };
+    
     } catch (error) {
+      console.error('Tutor API error:', error);
+      
       return {
-        text: "I'm having trouble processing that right now. Please try again.",
-        action: undefined
+        success: false,
+        response: 'Tutor engine failed.',
       };
     }
-  }
   
   speak(text: string, options?: { rate?: number; pitch?: number; volume?: number }) {
     this.synthesis.cancel(); // Stop any current speech

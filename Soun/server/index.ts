@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import session from "express-session";
@@ -12,20 +14,26 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(session({
-  store: new PostgresSessionStore({
-    pool,
-    createTableIfMissing: true
-  }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  ...(isProduction
+    ? {
+        store: new PostgresSessionStore({
+          pool,
+          createTableIfMissing: true,
+        }),
+      }
+    : {}),
+  secret: process.env.SESSION_SECRET || "dev-secret",
   resave: false,
   saveUninitialized: false,
-  cookie: { 
-    secure: process.env.NODE_ENV === 'production', 
+  cookie: {
+    secure: isProduction,
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
-    sameSite: 'lax'
-  }
+    sameSite: "lax",
+  },
 }));
 
 app.use((req, res, next) => {
@@ -82,11 +90,7 @@ app.use((req, res, next) => {
   // Serve the app on port 5000 to match Replit workflow expectations
   // this serves both the API and the client.
   const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  app.listen(port, () => {
     log(`serving on port ${port}`);
   });
 })();

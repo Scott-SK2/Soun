@@ -13,6 +13,7 @@ import { visualGenerationService } from "./services/visual-generation-service";
 import { studyGuideService } from './services/study-guide-service';
 import { flashcardService } from './services/flashcard-service';
 import { voiceAnalyticsService } from "./services/voice-analytics-service";
+import { askTutor, gradeTutor, getTutorProgress } from "./services/tutor-engine-service";
 
 // Placeholder functions for new vocal features (to be implemented)
 async function generateAdaptiveChallenges(userId: number, difficulty: number) {
@@ -1717,3 +1718,34 @@ router.post('/api/vocal-assessment/analyze', requireAuth, async (req, res) => {
 });
 
 export default router;
+app.post("/api/tutor/ask", async (req, res) => {
+  try {
+    const { question } = req.body;
+    const result = await askTutor(question);
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor ask error:", error);
+    res.status(500).json({ error: "Tutor ask failed" });
+  }
+});
+
+app.post("/api/tutor/grade", async (req, res) => {
+  try {
+    const { check_question, student_answer } = req.body;
+    const result = await gradeTutor(check_question, student_answer);
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor grade error:", error);
+    res.status(500).json({ error: "Tutor grade failed" });
+  }
+});
+
+app.get("/api/tutor/progress", async (_req, res) => {
+  try {
+    const result = await getTutorProgress();
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor progress error:", error);
+    res.status(500).json({ error: "Tutor progress failed" });
+  }
+});

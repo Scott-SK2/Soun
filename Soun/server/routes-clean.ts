@@ -10,6 +10,7 @@ import { documentAnalysisService } from './services/document-analysis-service';
 import { quizGenerationService } from './services/quiz-generation-service';
 import { fileTypeFromBuffer } from 'file-type';
 import * as CFB from 'cfb';
+import { askTutor, gradeTutor, getTutorProgress } from "./services/tutor-engine-service";
 
 const router = Router();
 
@@ -157,15 +158,40 @@ async function validateAndSaveFile(buffer: Buffer, originalName: string): Promis
 }
 
 // Authentication middleware
+const DEV_AUTH_BYPASS = process.env.NODE_ENV !== "production";
+
+function getDevUser(req: any) {
+  return {
+    id: 1,
+    email: req.body?.email || "dev@soun.local",
+    username: req.body?.username || "dev",
+    firstName: "Dev",
+    lastName: "User",
+    school: "Local Dev",
+    program: "Soun",
+    year: "2026",
+    education: "Local Dev - Soun",
+  };
+}
 function requireAuth(req: any, res: any, next: any) {
+  if (DEV_AUTH_BYPASS) {
+    req.session.userId = 1;
+    return next();
+  }
+
   if (!req.session?.userId) {
     return res.status(401).json({ error: 'Authentication required' });
   }
+
   next();
 }
 
 // Authentication routes
 router.get("/api/auth/me", async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    req.session.userId = 1;
+      return res.json(getDevUser(req));
+  }
   if (!req.session?.userId) {
     return res.status(401).json({ error: "Not authenticated" });
   }
@@ -191,6 +217,11 @@ router.get("/api/auth/me", async (req, res) => {
 });
 
 router.post("/api/auth/login", async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    const devUser = getDevUser(req);
+    req.session.userId = devUser.id;
+    return res.json(devUser);
+  }
   try {
     const { email, password } = req.body;
 
@@ -224,6 +255,11 @@ router.post("/api/auth/login", async (req, res) => {
 });
 
 router.post("/api/auth/register", async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    const devUser = getDevUser(req);
+    req.session.userId = devUser.id;
+    return res.json(devUser);
+  }
   try {
     const userData = insertUserSchema.parse(req.body);
 
@@ -323,6 +359,24 @@ router.post("/api/auth/create-test-user", async (req, res) => {
 
 // Course routes
 router.get("/api/courses", requireAuth, async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    return res.json([
+      {
+        id: 1,
+        courseId: 1,
+        courseID: 1,
+        userId: 1,
+        name: "Business Strategy",
+        title: "Business Strategy",
+        description: "Demo course connected to the Python tutoring engine",
+        color: "#2563eb",
+        icon: "book",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+  }
+
   try {
     const userId = req.session.userId!;
     const userCourses = await db
@@ -337,7 +391,6 @@ router.get("/api/courses", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Failed to get courses" });
   }
 });
-
 router.post("/api/courses", requireAuth, async (req, res) => {
   try {
     const userId = req.session.userId!;
@@ -359,6 +412,22 @@ router.post("/api/courses", requireAuth, async (req, res) => {
 });
 
 router.get("/api/courses/:courseId", requireAuth, async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    return res.json({
+      id: 1,
+      courseId: 1,
+      courseID: 1,
+      userId: 1,
+      name: "Business Strategy",
+      title: "Business Strategy",
+      description: "Demo course connected to the Python tutoring engine",
+      color: "#2563eb",
+      icon: "book",
+      credits: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
   try {
     const userId = req.session.userId!;
     const { courseId } = req.params;
@@ -401,6 +470,30 @@ router.get("/api/documents", requireAuth, async (req, res) => {
 });
 
 router.get("/api/courses/:courseId/documents", requireAuth, async (req, res) => {
+  if (DEV_AUTH_BYPASS) {
+    return res.json([
+      {
+        id: 1,
+        documentId: 1,
+        courseId: Number(req.params.courseId),
+        title: "1. Introduction.pptx",
+        name: "1. Introduction.pptx",
+        filename: "1. Introduction.pptx",
+        fileName: "1. Introduction.pptx",
+        fileType: "pptx",
+        originalName: "1. Introduction.pptx",
+        originalFilename: "1. Introduction.pptx",
+        type: "pptx",
+        mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        status: "processed",
+        processingStatus: "processed",
+        uploadedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        uploadDate: new Date().toISOString(),
+      },
+    ]);
+  }
   try {
     const userId = req.session.userId!;
     const { courseId } = req.params;
@@ -1013,6 +1106,46 @@ router.post('/api/learning-path/complete-step', async (req, res) => {
   } catch (error) {
     console.error('Error updating adaptive learning path:', error);
     res.status(500).json({ error: 'Failed to update learning path' });
+  }
+});
+router.post("/api/tutor/ask", async (req, res) => {
+  try {
+    console.log("HIT /api/tutor/ask", req.body);
+
+    const { question } = req.body;
+    const result = await askTutor(question);
+
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor ask error:", error);
+    res.status(500).json({ error: "Tutor ask failed" });
+  }
+});
+
+router.post("/api/tutor/grade", async (req, res) => {
+  try {
+    const { check_question, student_answer } = req.body;
+
+    const result = await gradeTutor(
+      check_question,
+      student_answer
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor grade error:", error);
+    res.status(500).json({ error: "Tutor grade failed" });
+  }
+});
+
+router.get("/api/tutor/progress", async (_req, res) => {
+  try {
+    const result = await getTutorProgress();
+
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor progress error:", error);
+    res.status(500).json({ error: "Tutor progress failed" });
   }
 });
 
