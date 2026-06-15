@@ -10,7 +10,7 @@ import { documentAnalysisService } from './services/document-analysis-service';
 import { quizGenerationService } from './services/quiz-generation-service';
 import { fileTypeFromBuffer } from 'file-type';
 import * as CFB from 'cfb';
-import { askTutor, gradeTutor, getTutorProgress } from "./services/tutor-engine-service";
+import { askTutor, gradeTutor, getTutorProgress, startTutorSession, getTutorProgressDashboard } from "./services/tutor-engine-service";
 
 const router = Router();
 
@@ -1122,6 +1122,17 @@ router.post("/api/tutor/ask", async (req, res) => {
   }
 });
 
+router.post("/api/tutor/start-session", async (req, res) => {
+  try {
+    const result = await startTutorSession();
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor start session error:", error);
+    res.status(500).json({ error: "Tutor start session failed" });
+  }
+});
+   
+
 router.post("/api/tutor/grade", async (req, res) => {
   try {
     const { check_question, student_answer } = req.body;
@@ -1150,3 +1161,14 @@ router.get("/api/tutor/progress", async (_req, res) => {
 });
 
 export default router;
+
+router.get("/api/tutor/progress-dashboard", async (req, res) => {
+  try {
+    const result = await getTutorProgressDashboard();
+    res.json(result);
+  } catch (error) {
+    console.error("Tutor progress dashboard error:", error);
+    res.status(500).json({ error: "Tutor progress dashboard failed" });
+  }
+});
+

@@ -44,6 +44,41 @@ export function VoiceAssistant({ courseId, courseName }: VoiceAssistantProps = {
     }
   }, [speaking]);
 
+  useEffect(() => {
+    const stored = sessionStorage.getItem("soun-session-starter");
+    
+    if (!stored) return;
+    
+    try {
+      const data = JSON.parse(stored);
+      const message = data?.message;
+      
+      if (!message) return;
+      
+      sessionStorage.removeItem("soun-session-starter");
+      
+      setResponse(message);
+      
+      setConversationHistory(prev => [
+        ...prev.slice(-4),
+        {
+          type: "assistant",
+          message,
+          timestamp: new Date(),
+          isCheck: true,
+        }
+      ]);
+      
+      setTimeout(() => {
+        speak(message);
+      }, 800);
+    
+    } catch (error) {
+      console.error("Failed to load Soun session starter:", error);
+      sessionStorage.removeItem("soun-session-starter");
+    }
+  }, []);
+
   // Stop listening when assistant starts speaking to avoid audio loop
   useEffect(() => {
     if (isSpeaking && isListening) {
@@ -346,6 +381,55 @@ const processVoiceCommand = useMutation({
       processVoiceCommand.mutate(command);
     }
   };
+  const startActiveStudySession = async () => {
+  try {
+    if (isSpeaking) {
+      toast({
+        title: "Please Wait",
+        description: "Let me finish speaking first!",
+        variant: "default"
+      });
+      return;
+    }
+
+    const response = await apiRequest("POST", "/api/tutor/start-session", {});
+    const data = await response.json();
+
+    const message = data.message;
+
+    if (!message) {
+      startListening();
+      return;
+    }
+
+    setResponse(message);
+
+    setConversationHistory(prev => [
+      ...prev.slice(-4),
+      {
+        type: "assistant",
+        message,
+        timestamp: new Date(),
+        isCheck: true,
+      }
+    ]);
+
+    speak(message);
+
+    // Start listening after Soun asks the active-study question
+    setTimeout(() => {
+      startListening();
+    }, 4500);
+
+  } catch (error) {
+    console.error("Start study session error:", error);
+    toast({
+      title: "Study Session Error",
+      description: "I couldn't start the study session.",
+      variant: "destructive"
+    });
+  }
+};
 
   const startListening = () => {
     // Don't start listening if assistant is speaking (avoid audio loop)
@@ -500,7 +584,7 @@ const processVoiceCommand = useMutation({
             ) : (
               <>
                 <Mic className="h-4 w-4 mr-2" />
-                {processVoiceCommand.isPending ? 'Processing...' : 'Ask Question'}
+                {processVoiceCommand.isPending ? 'Processing...' : 'Speak'}
               </>
             )}
           </Button>

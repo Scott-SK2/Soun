@@ -38,3 +38,32 @@ export async function getTutorProgress() {
 
   return response.json();
 }
+
+export async function startTutorSession() {
+  const baseUrl = process.env.PYTHON_TUTOR_URL || "http://127.0.0.1:8000";
+  console.log("PYTHON_TUTOR_URL:", baseUrl);
+
+  const response = await fetch(`${baseUrl}/start-session`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Python tutor /start-session failed: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
+export async function getTutorProgressDashboard() {
+  const baseUrl = process.env.PYTHON_TUTOR_URL || "http://127.0.0.1:8000";
+
+  const response = await fetch(`${baseUrl}/progress-dashboard`, {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Python tutor /progress-dashboard failed: ${response.status}`);
+  }
+
+  return await response.json();
+}

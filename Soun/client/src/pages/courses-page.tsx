@@ -156,6 +156,8 @@ export default function CoursesPage() {
     createCourse.mutate(courseData);
   };
 
+  
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -455,15 +457,37 @@ export default function CoursesPage() {
                         </div>
                         
                         <div className="mt-6 space-y-2">
-                          <Link href={`/courses/${course.courseId}/study`}>
-                            <Button 
-                              size="lg" 
-                              className="w-full text-base font-semibold py-3"
-                            >
-                              <Brain className="h-5 w-5 mr-2" />
-                              Start Studying
-                            </Button>
-                          </Link>
+                          <Button
+                          size="lg"
+                          className="w-full text-base font-semibold py-3"
+                          onClick={async () => {
+                            
+                            
+                            try {
+                              const response = await fetch("/api/tutor/start-session", {
+                                method: "POST",
+                              });
+                              
+                              const data = await response.json();
+                               
+                              
+                              sessionStorage.setItem(
+                                "soun-session-starter",
+                                JSON.stringify(data)
+                              );
+                              
+                              window.location.href = `/courses/${course.courseId}/study`;
+                            
+                            } catch (error) {
+                              console.error("Failed to start study session:", error);
+                              
+                              window.location.href = `/courses/${course.courseId}/study`;
+                            }
+                          }}
+                        >
+                          <Brain className="h-5 w-5 mr-2" />
+                          Start Studying
+                        </Button>
                           <Button 
                             size="default" 
                             variant="outline"

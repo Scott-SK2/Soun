@@ -60,6 +60,26 @@ interface MasteryData {
   };
 }
 
+interface TutorProgressDashboard {
+  course_id: string;
+  course_progress: number;
+  course_status: string;
+  study_time_sec: number;
+  sessions_count: number;
+  checks_completed: number;
+  accuracy: number;
+  strengths: any[];
+  needs_practice: any[];
+  concepts: Array<{
+    concept_id: string;
+    concept_title: string;
+    mastery: number;
+    status: string;
+    attempts: number;
+    good_answers: number;
+    bad_answers: number;
+  }>;
+}
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export default function ProgressPage() {
@@ -109,6 +129,29 @@ export default function ProgressPage() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
+  const { data: tutorProgress, isLoading: tutorProgressLoading } = useQuery<TutorProgressDashboard>({
+    queryKey: ['/api/tutor/progress-dashboard'],
+    queryFn: async () => {
+      const response = await fetch('/api/tutor/progress-dashboard', { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch tutor progress dashboard');
+      return response.json();
+    }
+  });
+
+  const courseDistributionData = tutorProgress
+  ? [
+      {
+        name: "Business Strategy",
+        minutes: Math.max(1, Math.round(tutorProgress.study_time_sec / 60)),
+        percentage: 100,
+      },
+    ]
+  : [];
+
+  const sortedConcepts = [...(tutorProgress?.concepts || [])].sort(
+    (a, b) => a.mastery - b.mastery
+  );
+
   return (
     <div className="container py-8">
       <div className="mb-6">
@@ -136,11 +179,10 @@ export default function ProgressPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summary ? formatTime(summary.total) : '0m'}
+                  {tutorProgress ? formatTime(Math.round(tutorProgress.study_time_sec / 60)) : '0m'}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {summary && summary.percentChange >= 0 ? '+' : ''}
-                  {summary?.percentChange || 0}% from last week
+                  {tutorProgress?.sessions_count || 0} study sessions
                 </p>
               </CardContent>
             </Card>
@@ -152,23 +194,40 @@ export default function ProgressPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summary?.weeklyGoalProgress || 0}%
+                  {
+                  tutorProgress
+                  ? Math.min(
+                    100,
+                    Math.round((tutorProgress.study_time_sec / 36000) * 100)
+                  )
+                : 0
+              }%
                 </div>
-                <Progress value={summary?.weeklyGoalProgress || 0} className="mt-2" />
+                <Progress
+                value={
+                  tutorProgress
+                  ? Math.min(
+                    100,
+                    Math.round((tutorProgress.study_time_sec / 36000) * 100)
+                  )
+                : 0
+              }
+              className="mt-2"
+            />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Goal: {summary ? formatTime(summary.weeklyGoal) : '10h'}
+                  Goal: '10h'
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Study Streak</CardTitle>
+                <CardTitle className="text-sm font-medium">Sessions Completed</CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {summary?.streakDays || 0} days
+                  {tutorProgress?.sessions_count || 0} sessions
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Keep it up!
@@ -183,10 +242,10 @@ export default function ProgressPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {masteryData?.overallMastery || 0}%
+                  {tutorProgress?.course_progress || 0}%
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {masteryData?.topicsStudied || 0} topics studied
+                  {tutorProgress?.concepts?.length || 0} concepts studied
                 </p>
               </CardContent>
             </Card>
@@ -220,14 +279,14 @@ export default function ProgressPage() {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <PieChart className="h-5 w-5 mr-2" />
-                  Subject Distribution
+                  Course Distribution
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChartComponent>
                     <Pie
-                      data={subjectData}
+                      data={courseDistributionData}
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
@@ -235,7 +294,7 @@ export default function ProgressPage() {
                       dataKey="minutes"
                       label={({ name, percentage }) => `${name}: ${percentage}%`}
                     >
-                      {subjectData.map((entry, index) => (
+                      {courseDistributionData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -276,25 +335,45 @@ export default function ProgressPage() {
         </TabsContent>
 
         <TabsContent value="subjects" className="space-y-6">
-          <div className="grid gap-4">
-            {subjectData.map((subject, index) => (
-              <Card key={index}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold">{subject.name}</h3>
-                    <span className="text-sm text-muted-foreground">
-                      {formatTime(subject.minutes)}
-                    </span>
-                  </div>
-                  <Progress value={subject.percentage} className="mb-2" />
-                  <div className="text-sm text-muted-foreground">
-                    {subject.percentage}% of total study time
-                  </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BookOpen className="h-5 w-5 mr-2" />
+                Business Strategy
+                </CardTitle>
+                </CardHeader>
+                
+                <CardContent className="space-y-5">
+                  {(tutorProgress?.concepts || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No concepts studied yet.
+                    </p>
+                  ) : (
+                    sortedConcepts.map((concept) => (
+                    <div key={concept.concept_id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{concept.concept_title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {concept.attempts} attempts ·
+                            ✓{concept.good_answers} correct ·
+                            ✗{concept.bad_answers} missed ·
+                            {concept.status.replaceAll("_", " ")}
+                          </p>
+                        </div>
+                        
+                        <Badge variant={concept.mastery >= 75 ? "default" : concept.mastery >= 40 ? "secondary" : "destructive"}>
+                          {concept.mastery}%
+                        </Badge>
+                      </div>
+                      
+                      <Progress value={concept.mastery} />
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </TabsContent>
+            </TabsContent>
 
         <TabsContent value="mastery" className="space-y-6">
             <MasteryPrediction />
